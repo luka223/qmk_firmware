@@ -46,11 +46,12 @@ bool lpm_is_kb_idle(void) {
 static uint32_t battery_push_timer = 0;
 
 /* The 2.4 GHz receiver does not forward host -> keyboard raw HID requests,
- * so push the KC_GET_BATTERY report to the host periodically while connected. */
+ * so push the KC_GET_BATTERY report to the host periodically while connected.
+ * Bluetooth is skipped: the host reads battery there via the BLE battery service. */
 void keychron_task_kb(void) {
     if (timer_elapsed32(battery_push_timer) > BATTERY_PUSH_INTERVAL) {
         battery_push_timer = timer_read32();
-        if ((get_transport() & TRANSPORT_WIRELESS) && wireless_get_state() == WT_CONNECTED) {
+        if (get_transport() == TRANSPORT_P2P4 && wireless_get_state() == WT_CONNECTED) {
             kc_battery_push();
         }
     }
