@@ -1,97 +1,115 @@
-# Keychron QMK Firmware
+# Keychron Q1 HE – battery-monitor firmware (unofficial)
 
-[![Star this repo](https://img.shields.io/github/stars/Keychron/qmk_firmware?style=social&label=Star%20this%20repo)](https://github.com/Keychron/qmk_firmware)
+> **Disclaimer:** This is **unofficial, community-modified firmware**. It is not affiliated with,
+> endorsed by, or supported by Keychron or the QMK project. Flash it **at your own risk**.
+> It is a derivative of the QMK / Keychron firmware and is licensed under **GPLv2** (see
+> [license_GPLv2.md](license_GPLv2.md)).
 
-![Keychron Keyboards](https://raw.githubusercontent.com/Keychron/Keychron-Keyboards-Hardware-Design/main/docs/assets/hero-keychron-hardware-design.jpg)
+## What this is
 
-Official QMK firmware for Keychron and Lemokey keyboards. This repository contains the firmware source, build configurations, and keymaps for 63+ boards across the Q, Q HE, Q Max, K HE, K Max, K Pro, V, V Max, C Pro, S, X, and Lemokey series.
+A fork of [Keychron/qmk_firmware](https://github.com/Keychron/qmk_firmware) trimmed down to the
+**Keychron Q1 HE** only. It adds one feature: the keyboard **reports its battery level** to a
+program on the PC, including when it is connected through the 2.4 GHz **Keychron Link** receiver.
 
-## Why Open Source?
+- Over the **USB cable**, a program sends raw HID command `0xA4` and the keyboard replies.
+- Over **2.4 GHz**, the stock receiver does not forward PC → keyboard requests, so the keyboard
+  **pushes** the same `0xA4` report on its own every 2 seconds while connected. The PC program
+  just listens on the receiver's raw HID interface.
+- Over **Bluetooth** nothing is pushed; Windows reads the battery through the standard BLE battery service.
 
-Keychron is the first major keyboard brand to fully open-source both its [firmware](https://github.com/Keychron/qmk_firmware) and [hardware design](https://github.com/Keychron/Keychron-Keyboards-Hardware-Design). We believe you should be able to see, verify, and modify every line of code that runs on your keyboard. Open source means full transparency — no black boxes between you and your hardware.
+The battery report is ported from [Keychron PR #477](https://github.com/Keychron/qmk_firmware/pull/477)
+by [OutersGIT](https://github.com/OutersGIT) (written for the K10 HE; not merged upstream).
+Thanks to them for the original work.
 
-We also want to build something bigger than what any single company can do alone. By opening our firmware to the community, developers and enthusiasts can push what keyboards are capable of — custom keymaps, new features, creative workflows — and those contributions make every Keychron keyboard better for everyone.
+| Layout | Status |
+|---|---|
+| `ansi_encoder` (PID `0x0B10`) | Built. Hardware testing in progress. |
+| `iso_encoder` (PID `0x0B11`) | Builds, **untested**. USB device version not bumped. |
+| `jis_encoder` (PID `0x0B12`) | Not build-checked, **untested**. USB device version not bumped. |
 
-## Features
+## Base version
 
-- **Hall Effect magnetic switch support** — adjustable actuation and rapid trigger on HE boards
-- **Wireless connectivity** — Bluetooth 5.1 and 2.4 GHz firmware for wireless models
-- **[Keychron Launcher](https://launcher.keychron.com/)** — remap keys, tune HE settings, and configure lighting from your browser with no setup
-- **RGB Matrix lighting** — per-key RGB effects and customization
-- **Multiple layout variants** — ANSI, ISO, and JIS for every supported board
-- **Full QMK feature set** — layers, tap-dance, combos, macros, encoders, OLED, and more
+Keychron has not published the exact source of the official Q1 HE firmware **1.4.0**
+(Launcher reports `v1.4.0 2026-08-03-09:40:49`; the public source still says 1.3.1). This fork is
+based on **`07bfc38a4b`** (2026-07-21, "Fix K0 Max matrix not working") on Keychron's `2025q3`
+branch: the last public commit before the 1.4.0 build time. The `keyboards/keychron/q1_he/` folder
+has not changed since April 2026, so this should be very close to 1.4.0, but it **may not be
+byte-identical**.
 
-## Getting Started
+These later public commits are **not** included:
 
-### Option A: Use Keychron Launcher (no code required)
+- `9a6b37a77c` (2026-08-07) Add EEPROM driver header
+- `620468c58b` (2026-08-07) Block raw HID send while pairing
+- `fb316dae6d` (2026-09-02) Fix snap click keys releasing when set to FIRST_KEY and SECOND_KEY
 
-If you just want to remap keys, tune Hall Effect settings, or change lighting, you don't need to build firmware:
+## Differences from official 1.4.0
 
-1. Open [Keychron Launcher](https://launcher.keychron.com/) in a Chromium-based browser such as Google Chrome, Microsoft Edge, Brave, Opera, or Vivaldi
-2. Connect your Keychron keyboard via USB
-3. Remap keys, configure layers, adjust lighting, and fine-tune HE sensitivity — changes apply instantly
+1. Raw HID command `0xA4` (battery report), answered over USB and pushed every 2 s over 2.4 GHz.
+   The `FEATURE_BATTERY` bit is set in the `0xA2` feature reply.
+2. Battery voltage is also measured while on the USB cable, so the USB reply has a current value.
+3. Launcher shows the version as **`v1.4.0-battery-monitor`** (no build date; the reply is limited
+   to 31 characters).
 
-Keychron Launcher works out of the box with no JSON import required, and supports features beyond VIA such as Hall Effect actuation point tuning and rapid trigger configuration. Safari and other non-Chromium browsers will not work with Keychron Launcher.
+## Battery report format
 
-### Option B: Build from source
+32-byte raw HID report, usage page `0xFF60`, usage `0x61`, VID `0x3434`:
 
-Set up your build environment and compile custom firmware:
+| Byte | Meaning |
+|---|---|
+| 0 | `0xA4` |
+| 1 | battery % |
+| 2–3 | battery voltage in mV, little-endian |
+| 4 | charging: 0 = on battery, 1 = charging, 2 = full |
+| 5 | connection: `0x01` USB, `0x02` Bluetooth, `0x04` 2.4 GHz |
+| 6 | model id: `2` = Q1 HE (own choice; the K10 HE mod uses `1`) |
 
-```bash
-python3 -m pip install qmk
-qmk setup Keychron/qmk_firmware
-qmk compile -kb keychron/q1_he/ansi_encoder -km keychron
-qmk flash -kb keychron/q1_he/ansi_encoder -km keychron
-```
+**Host program over the receiver:** don't ask, listen. Open every `VID 0x3434` interface with usage
+page `0xFF60`, keep reports where byte 0 is `0xA4` (and byte 6 is `2`), and store the latest one with
+a timestamp. If nothing arrives for ~30–60 s, the keyboard is asleep or off: show "last seen"
+instead of a number.
 
-More build examples:
+## Build (Windows)
 
-```bash
-make keychron/q1_he/ansi_encoder:keychron
-make keychron/k8_pro/ansi/rgb:keychron
-make keychron/v1_max/ansi_encoder:keychron:flash
-```
+1. Install [QMK MSYS](https://msys.qmk.fm/).
+2. Clone this repo. **Don't run plain `qmk setup`** (it clones upstream qmk_firmware). Instead,
+   point QMK at this clone and fetch the submodules:
+   ```
+   qmk config user.qmk_home=D:/projects/qmk_firmware
+   git submodule update --init --recursive
+   ```
+3. Build:
+   ```
+   qmk compile -kb keychron/q1_he/ansi_encoder -km keychron
+   ```
+   (or `make keychron/q1_he/ansi_encoder:keychron`)
+4. The output is `keychron_q1_he_ansi_encoder_keychron.bin` in the repo root.
 
-See the [QMK build environment setup](https://docs.qmk.fm/#/getting_started_build_tools) and [make guide](https://docs.qmk.fm/#/getting_started_make_guide) for details. New to QMK? Start with the [Complete Newbs Guide](https://docs.qmk.fm/#/newbs).
+## Flash
 
-## Supported Keyboards
+1. **Back up** your keymap and HE profiles in [Keychron Launcher](https://launcher.keychron.com/)
+   first. Flashing may reset them.
+2. Install [QMK Toolbox](https://github.com/qmk/qmk_toolbox/releases) and open the `.bin`.
+3. Enter bootloader mode: unplug USB → set the mode switch to **Cable** → hold **Esc** (or press
+   the reset button under the space bar) → plug USB back in. Toolbox shows
+   "STM32 DFU device connected".
+4. Click **Flash**. If 2.4 GHz does not reconnect afterwards, re-pair with the receiver.
+5. Check: Launcher (over the USB cable) shows `v1.4.0-battery-monitor`.
 
-All board definitions live under [`keyboards/keychron/`](keyboards/keychron/) and [`keyboards/lemokey/`](keyboards/lemokey/).
+## Go back to official firmware
 
-| Series | Boards | Type |
-|--------|--------|------|
-| **Q HE** | Q1 HE, Q2 HE, Q3 HE, Q4 HE, Q5 HE, Q6 HE, Q12 HE | Hall Effect, wireless |
-| **Q / Q Max** | Q0, Q1 v1/v2, Q1 Max, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q9 Plus, Q10, Q11, Q12, Q60, Q65 | Mechanical, various |
-| **K HE** | K2 HE, K4 HE, K6 HE, K8 HE, K10 HE | Hall Effect, wireless |
-| **K Max / K Pro** | K4 Max, K8 Max, K8 Pro, K9 Max | Mechanical, wireless |
-| **V / V Max** | V1, V1 8K, V1 Max, V2, V3, V4, V5, V5 Max, V6, V6 v2, V6 Max, V7, V8, V10 | Mechanical, wired/wireless |
-| **C Pro** | C1 Pro, C1 Pro v2, C1 Pro 8K, C2 Pro, C2 Pro v2, C2 Pro 8K, C3 Pro, C3 Pro 8K | Mechanical, wired |
-| **S / X** | S1, X0 | Mechanical |
-| **Lemokey** | L1 HE, P1 HE, P2 HE | Hall Effect gaming |
+Connect with the USB cable, open https://launcher.keychron.com → **Firmware**, and flash the latest
+official firmware. If Launcher won't offer it because of the custom version text, use the
+forced-flash page: https://launcher.keychron.com/#/firmware/flash?force=true&keep=true
 
-Each board folder contains its own `readme.md` with exact build targets, product links, and reset instructions.
+The STM32 bootloader is in ROM, so a bad flash can't brick the keyboard: bootloader mode always
+works and you can flash again.
 
-## Hardware Design
+## Test tools
 
-For PCB files, schematics, and hardware design resources, see the companion repository:
+Both scripts need `pip install hidapi`. Close Launcher first so it doesn't hold the device.
 
-[Keychron-Keyboards-Hardware-Design](https://github.com/Keychron/Keychron-Keyboards-Hardware-Design)
-
-## Community and Support
-
-- **Join the community**  
-  Join the [Keychron Discord](https://discord.com/invite/HAYbRrTsjN) to share builds, ask questions, and help grow the hardware modding community.
-- [Keychron Website](https://www.keychron.com)
-- [Keychron on Reddit](https://www.reddit.com/r/Keychron/)
-- [QMK Discord](https://discord.gg/qmk)
-- [QMK Documentation](https://docs.qmk.fm)
-
-## Contributing
-
-Contributions are welcome — whether it's a new keymap, a bug fix, or documentation improvement. See [`docs/contributing.md`](docs/contributing.md) for guidelines on submitting pull requests.
-
-## License
-
-This project is licensed under the [GNU General Public License v2.0](LICENSE).
-
-This repository tracks the [upstream QMK firmware](https://github.com/qmk/qmk_firmware) with Keychron-specific board definitions and firmware additions.
+- `python tools/q1he_battery.py` – asks the keyboard for its battery once over the USB cable.
+  Prints %, mV, charging state, connection and model id.
+- `python tools/q1he_battery.py --listen` – prints pushed `0xA4` reports from any Keychron raw HID
+  interface (use this with the 2.4 GHz receiver; a report should appear about every 2 s).
+- `python tools/q1he_version.py` – read-only; prints the firmware version text and USB device version.
