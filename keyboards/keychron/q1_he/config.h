@@ -100,3 +100,9 @@
 #define FN_KEY_1 MO(1)
 #define FN_KEY_2 MO(3)
 #define FN_BL_TRIG_KEY KC_END
+
+/* Battery report model id (data[6] of KC_GET_BATTERY): 2 = Q1 HE */
+#define KC_BATTERY_MODEL_ID 2
+
+/* Version text shown in Keychron Launcher for this custom build */
+#define KC_FIRMWARE_VERSION_STRING "v1.4.0-battery-monitor"

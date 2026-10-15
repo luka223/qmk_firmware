@@ -36,4 +36,23 @@ void keyboard_post_init_kb(void) {
 bool lpm_is_kb_idle(void) {
     return !backlight_indicator_is_active();
 }
+
+#    include "keychron_raw_hid.h"
+
+#    ifndef BATTERY_PUSH_INTERVAL
+#        define BATTERY_PUSH_INTERVAL 2000
+#    endif
+
+static uint32_t battery_push_timer = 0;
+
+/* The 2.4 GHz receiver does not forward host -> keyboard raw HID requests,
+ * so push the KC_GET_BATTERY report to the host periodically while connected. */
+void keychron_task_kb(void) {
+    if (timer_elapsed32(battery_push_timer) > BATTERY_PUSH_INTERVAL) {
+        battery_push_timer = timer_read32();
+        if ((get_transport() & TRANSPORT_WIRELESS) && wireless_get_state() == WT_CONNECTED) {
+            kc_battery_push();
+        }
+    }
+}
 #endif
